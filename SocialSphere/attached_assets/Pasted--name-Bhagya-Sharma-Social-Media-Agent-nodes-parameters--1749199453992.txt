@@ -1,0 +1,118 @@
+{
+  "name": "Bhagya Sharma Social Media Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["message"]
+      },
+      "id": "Telegram Trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { input: $json[\"message\"][\"text\"] || \"Voice message received\", isVoice: !!$json[\"message\"][\"voice\"] } }];"
+      },
+      "id": "Prepare Input",
+      "name": "Prepare Input",
+      "type": "n8n-nodes-base.function",
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "apiKey",
+        "model": "gpt-4o",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are Bhagya Sharma’s personal LinkedIn Agent.\nBhagya Sharma’s tone is witty, creative, warm, thoughtful.\nYour tasks:\n- Write LinkedIn posts based on Bhagya’s ideas.\n- Write thoughtful, engaging replies to others’ posts.\n- Write warm and professional DM replies.\nAdapt to context. Output only the text that should be posted.\nStyle examples:\n- Embrace curiosity in every scroll.\n- Sometimes a smile is the best comment.\n- Let’s build connections that matter."
+          },
+          {
+            "role": "user",
+            "content": "{{$json[\"input\"]}}"
+          }
+        ],
+        "temperature": 0.8
+      },
+      "id": "Generate Content (GPT-4o)",
+      "name": "Generate Content (GPT-4o)",
+      "type": "n8n-nodes-base.openai",
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "Here is the draft:\n\n{{$json[\"choices\"][0][\"message\"][\"content\"]}}\n\nApprove this post?",
+        "additionalFields": {
+          "replyMarkup": "{\"inline_keyboard\":[[{\"text\":\"✅ Approve\",\"callback_data\":\"approve_post\"}],[{\"text\":\"❌ Reject\",\"callback_data\":\"reject_post\"}]]}"
+        }
+      },
+      "id": "Send Draft for Approval",
+      "name": "Send Draft for Approval",
+      "type": "n8n-nodes-base.telegram",
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "updates": ["callback_query"]
+      },
+      "id": "Telegram Approval Trigger",
+      "name": "Telegram Approval Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"callback_query\"][\"data\"]}}",
+              "operation": "equal",
+              "value2": "approve_post"
+            }
+          ]
+        }
+      },
+      "id": "Check Approval",
+      "name": "Check Approval",
+      "type": "n8n-nodes-base.if",
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "url": "https://api.phantombuster.com/api/v2/agent/YOUR_AGENT_ID/launch",
+        "bodyParametersUi": {
+          "parameter": [
+            {
+              "name": "output",
+              "value": "={{$node[\"Generate Content (GPT-4o)\"].json[\"choices\"][0][\"message\"][\"content\"]}}"
+            }
+          ]
+        }
+      },
+      "id": "Post to LinkedIn (PhantomBuster)",
+      "name": "Post to LinkedIn (PhantomBuster)",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1300, 300]
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [[{ "node": "Prepare Input", "type": "main", "index": 0 }]]
+    },
+    "Prepare Input": {
+      "main": [[{ "node": "Generate Content (GPT-4o)", "type": "main", "index": 0 }]]
+    },
+    "Generate Content (GPT-4o)": {
+      "main": [[{ "node": "Send Draft for Approval", "type": "main", "index": 0 }]]
+    },
+    "Telegram Approval Trigger": {
+      "main": [[{ "node": "Check Approval", "type": "main", "index": 0 }]]
+    },
+    "Check Approval": {
+      "main": [[{ "node": "Post to LinkedIn (PhantomBuster)", "type": "main", "index": 0 }], []]
+    }
+  }
+}
